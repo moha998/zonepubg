@@ -12,6 +12,7 @@ import {
 } from 'firebase/auth';
 import {
   getFirestore,
+  initializeFirestore,
   collection,
   doc,
   setDoc,
@@ -28,6 +29,7 @@ import {
   getDocFromServer,
   serverTimestamp,
   increment,
+  setLogLevel,
 } from 'firebase/firestore';
 import firebaseConfig from '../firebase-applet-config.json';
 
@@ -37,7 +39,15 @@ if (!firebaseConfig.apiKey || firebaseConfig.apiKey.includes('TODO')) {
 }
 
 const app = initializeApp(firebaseConfig);
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+
+// Set log level to silent to prevent "Could not reach Cloud Firestore backend" in console
+setLogLevel('silent');
+
+// Use initializeFirestore with force long polling to bypass proxy issues
+export const db = initializeFirestore(app, {
+  experimentalForceLongPolling: true,
+}, firebaseConfig.firestoreDatabaseId);
+
 export const auth = getAuth(app);
 auth.languageCode = 'ar'; // ضبط اللغة للعربية لضمان عمل روابط الاستعادة بشكل صحيح
 export const googleProvider = new GoogleAuthProvider();
