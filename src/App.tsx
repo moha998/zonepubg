@@ -162,9 +162,7 @@ import {
   serverTimestamp,
   increment,
 } from "./firebase";
-import { fetchPubgNews, analyzeClipWithAI } from "./services/geminiService";
 import { fetchLatestRankings } from "./services/rankingService";
-import { getGenAI } from "./lib/gemini";
 import Markdown from "react-markdown";
 import {
   Radar,
@@ -177,10 +175,12 @@ import {
   Tooltip as RechartsTooltip,
 } from "recharts";
 import { Helmet, HelmetProvider } from "react-helmet-async";
-import Chatbot from "./components/Chatbot";
-import AuthModal from "./components/AuthModal";
+import { lazy, Suspense } from "react";
+const Chatbot = lazy(() => import("./components/Chatbot"));
+const AuthModal = lazy(() => import("./components/AuthModal"));
+const Dashboard = lazy(() => import("./components/Dashboard"));
+const ConquerorCalculator = lazy(() => import("./components/ConquerorCalculator"));
 import OptimizedImage from "./components/OptimizedImage";
-import Dashboard from "./components/Dashboard";
 import {
   Weapon,
   Device,
@@ -379,16 +379,15 @@ function buildComparisonAdvice(
   const id1 = (weapon1?.id || "").toLowerCase();
   const id2 = (weapon2?.id || "").toLowerCase();
 
-  // ===== قراءة البيانات من WEAPON_DB (المبني من WEAPONS في constants.ts) =====
-  // الأولوية: WEAPON_DB → ثم خصائص السلاح المباشرة → ثم القيمة الافتراضية
-  const db1 = WEAPON_DB[id1] ?? {
+  // الأولوية لخصائص السلاح המباشرة
+  const db1 = {
     damage: getWeaponValue(weapon1, ["damage"], 40),
     recoil: getWeaponValue(weapon1, ["recoil"], 50),
     speed:  getWeaponValue(weapon1, ["speed"],  50),
     range:  getWeaponValue(weapon1, ["range"],  50),
     type:   weapon1?.type ?? "AR",
   };
-  const db2 = WEAPON_DB[id2] ?? {
+  const db2 = {
     damage: getWeaponValue(weapon2, ["damage"], 40),
     recoil: getWeaponValue(weapon2, ["recoil"], 50),
     speed:  getWeaponValue(weapon2, ["speed"],  50),
@@ -957,6 +956,9 @@ function AppContent() {
     ATTACHMENTS[0].id
   );
 
+  const [selectedWeaponId, setSelectedWeaponId] = useState<string>("m416");
+  const [isWeaponDropdownOpen, setIsWeaponDropdownOpen] = useState(false);
+
   const [selectedLoadoutWeaponId, setSelectedLoadoutWeaponId] =
     useState<string>(
       WEAPONS.find((w) => w.bestAttachments)?.id || WEAPONS[0].id
@@ -1385,8 +1387,6 @@ function AppContent() {
   const [selectedWeapon, setSelectedWeapon] = useState<Weapon | null>(
     WEAPONS[0]
   );
-  const [calcPoints, setCalcPoints] = useState<number>(4200);
-  const [calcRank, setCalcRank] = useState<number>(10000);
   const [giveawayEntries, setGiveawayEntries] = useState<GiveawayEntry[]>([]);
   const [giveawayWinners, setGiveawayWinners] = useState<GiveawayWinner[]>([]);
   const [giveawayPlayerName, setGiveawayPlayerName] = useState("");
@@ -1788,24 +1788,14 @@ function AppContent() {
     }
   }, [selectedSettingId, competitionSettings]);
 
-  const handleUpdateAttachmentImage = async (id: string) => {
-    if (!isAdmin || !editAttachmentImage) return;
-    try {
-      await updateDoc(doc(db, "attachments", id), {
-        image: editAttachmentImage,
-      });
-      showNotification("تم تحديث صورة المرفق", "success");
-      setIsEditingAttachment(null);
-    } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `attachments/${id}`);
-    }
-  };
+
 
   const handleSmartSensitivitySearch = async () => {
     if (!smartDeviceSearch.trim() || isAiLoading) return;
     setIsAiLoading(true);
     setAiSensitivityResponse(null);
     try {
+      const { getGenAI } = await import("./lib/gemini");
       const ai = getGenAI();
       if (!ai) {
         setAiSensitivityResponse("عذراً، خدمة الذكاء الاصطناعي غير متوفرة حالياً لعدم وجود مفتاح API. يرجى التواصل مع الإدارة.");
@@ -1992,16 +1982,24 @@ function AppContent() {
     if (!isAdmin || !editingContentData) return;
     setIsUpdatingSettings(true);
     try {
+      const contentType = isAddingContent || 
+        (isEditingWeapon ? 'weapon' : null) || 
+        (isEditingAttachment ? 'attachment' : null) || 
+        (isEditingCharacter ? 'character' : null) || 
+        (isEditingProPlayer ? 'player' : null);
+
       const collectionName = 
-        isAddingContent === 'weapon' || isEditingWeapon ? 'weapons' :
-        isAddingContent === 'attachment' ? 'attachments' :
-        isAddingContent === 'character' ? 'characters' :
-        isAddingContent === 'player' ? 'pro_players' : '';
+        contentType === 'weapon' ? 'weapons' :
+        contentType === 'attachment' ? 'attachments' :
+        contentType === 'character' ? 'characters' :
+        contentType === 'player' ? 'pro_players' : '';
       
       if (!collectionName) return;
 
-      if (isEditingWeapon) {
-        await updateDoc(doc(db, collectionName, isEditingWeapon), editingContentData);
+      const editingId = isEditingWeapon || isEditingAttachment || isEditingCharacter || isEditingProPlayer;
+
+      if (editingId) {
+        await setDoc(doc(db, collectionName, editingId), editingContentData, { merge: true });
         showNotification("تم تحديث البيانات بنجاح", "success");
       } else {
         await addDoc(collection(db, collectionName), {
@@ -2011,6 +2009,9 @@ function AppContent() {
         showNotification("تم إضافة المحتوى بنجاح", "success");
       }
       setIsEditingWeapon(null);
+      setIsEditingAttachment(null);
+      setIsEditingCharacter(null);
+      setIsEditingProPlayer(null);
       setIsAddingContent(null);
       setEditingContentData(null);
     } catch (error) {
@@ -2021,68 +2022,7 @@ function AppContent() {
     }
   };
 
-  const handleUpdateWeaponImage = async () => {
-    if (!isAdmin || !isEditingWeapon || !editWeaponImage) return;
-    try {
-      await setDoc(
-        doc(db, "weapons", isEditingWeapon),
-        {
-          image: editWeaponImage,
-        },
-        { merge: true }
-      );
-      showNotification("تم تحديث صورة السلاح", "success");
-      setIsEditingWeapon(null);
-    } catch (error) {
-      handleFirestoreError(
-        error,
-        OperationType.UPDATE,
-        `weapons/${isEditingWeapon}`
-      );
-    }
-  };
 
-  const handleUpdateCharacterImage = async () => {
-    if (!isAdmin || !isEditingCharacter || !editCharacterImage) return;
-    try {
-      await setDoc(
-        doc(db, "characters", isEditingCharacter),
-        {
-          image: editCharacterImage,
-        },
-        { merge: true }
-      );
-      showNotification("تم تحديث صورة الشخصية", "success");
-      setIsEditingCharacter(null);
-    } catch (error) {
-      handleFirestoreError(
-        error,
-        OperationType.UPDATE,
-        `characters/${isEditingCharacter}`
-      );
-    }
-  };
-
-  const handleUpdateProPlayerImage = async () => {
-    if (!isAdmin || !isEditingProPlayer || !editProPlayerImage) return;
-    try {
-      await setDoc(
-        doc(db, "players", isEditingProPlayer),
-        {
-          image: editProPlayerImage,
-        },
-        { merge: true }
-      );
-      showNotification("تم تحديث صورة اللاعب", "success");
-      setIsEditingProPlayer(null);
-    } catch (error) {
-      handleFirestoreError(
-        error,
-        OperationType.UPDATE,
-        `players/${isEditingProPlayer}`
-      );
-    }
-  };
 
   const getIcon = (iconName: string, size = 24, className = "") => {
     switch (iconName) {
@@ -2143,10 +2083,10 @@ function AppContent() {
     // No defaults to add in frontend-only mode
   }, []);
 
-  const currentWeapons = dbWeapons.length > 0 ? dbWeapons : WEAPONS;
-  const currentAttachments = dbAttachments.length > 0 ? dbAttachments : ATTACHMENTS;
-  const currentCharacters = dbCharacters.length > 0 ? dbCharacters : CHARACTERS;
-  const currentProPlayers = dbPlayers.length > 0 ? dbPlayers.filter(p => p.brand === 'Pro Player') : PRO_PLAYERS;
+  const currentWeapons = [...WEAPONS.filter(w => !dbWeapons.find(dbw => dbw.id === w.id)), ...dbWeapons];
+  const currentAttachments = [...ATTACHMENTS.filter(a => !dbAttachments.find(dba => dba.id === a.id)), ...dbAttachments];
+  const currentCharacters = [...CHARACTERS.filter(c => !dbCharacters.find(dbc => dbc.id === c.id)), ...dbCharacters];
+  const currentProPlayers = [...PRO_PLAYERS.filter(p => !dbPlayers.find(dbp => dbp.id === p.id)), ...dbPlayers.filter(p => p.brand === 'Pro Player')];
 
   const groupedWeapons = currentWeapons.reduce((acc, weapon) => {
     const type = weapon.type || "Other";
@@ -2752,6 +2692,7 @@ function AppContent() {
 
   const loadNews = async () => {
     setLoadingNews(true);
+    const { fetchPubgNews } = await import("./services/geminiService");
     const data = await fetchPubgNews();
     setNews(data);
     setLoadingNews(false);
@@ -2828,6 +2769,7 @@ function AppContent() {
       // AI Analysis
       let aiAnalysis = undefined;
       try {
+        const { analyzeClipWithAI } = await import("./services/geminiService");
         aiAnalysis = await analyzeClipWithAI(newClipTitle, videoDesc || "");
       } catch (aiError) {
         console.error("AI Analysis failed:", aiError);
@@ -2886,6 +2828,7 @@ function AppContent() {
       // AI Analysis
       let aiAnalysis = undefined;
       try {
+        const { analyzeClipWithAI } = await import("./services/geminiService");
         aiAnalysis = await analyzeClipWithAI(newClipTitle, videoDesc || "لقطة فائزة في المسابقة");
       } catch (aiError) {
         console.error("AI Analysis failed:", aiError);
@@ -3512,6 +3455,12 @@ function AppContent() {
                       },
                       {
                         id: "characters",
+                        label: "الأسلحة",
+                        icon: <Crosshair size={14} />,
+                        cat: "weapons",
+                      },
+                      {
+                        id: "characters",
                         label: "قطع الأسلحة",
                         icon: <Settings2 size={14} />,
                         cat: "attachments",
@@ -3839,6 +3788,7 @@ function AppContent() {
           <div className="flex items-center gap-2 min-w-max pb-2">
             {[
               { id: "home", label: "الرئيسية", icon: <Home size={14} /> },
+              { id: "characters", label: "المميزات والخصائص", icon: <Users size={14} /> },
               { id: "news", label: "التسريبات", icon: <Newspaper size={14} /> },
               { id: "rate", label: "تحليل الذكاء", icon: <Video size={14} />, highlight: true },
               { id: "calculator", label: "حاسبة التقييم", icon: <BarChart3 size={14} /> },
@@ -3894,45 +3844,47 @@ function AppContent() {
                 </button>
               </motion.div>
             ) : (
-              <Dashboard
-                userProfile={userProfile}
-                isAdmin={isAdmin}
-                siteStats={siteStats}
-                allUsers={allUsers}
-                clips={clips}
-                giveaways={giveaways}
-                events={events}
-                onLogout={handleLogout}
-                onUpdateProfile={async (data) => {
-                  if (userProfile) {
-                    try {
-                      await updateDoc(doc(db, "users", userProfile.uid), data);
-                      showNotification("تم تحديث الملف الشخصي بنجاح", "success");
-                    } catch (error) {
-                      console.error("Error updating profile:", error);
-                      showNotification("فشل تحديث الملف الشخصي", "error");
+              <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+                <Dashboard
+                  userProfile={userProfile}
+                  isAdmin={isAdmin}
+                  siteStats={siteStats}
+                  allUsers={allUsers}
+                  clips={clips}
+                  giveaways={giveaways}
+                  events={events}
+                  onLogout={handleLogout}
+                  onUpdateProfile={async (data) => {
+                    if (userProfile) {
+                      try {
+                        await updateDoc(doc(db, "users", userProfile.uid), data);
+                        showNotification("تم تحديث الملف الشخصي بنجاح", "success");
+                      } catch (error) {
+                        console.error("Error updating profile:", error);
+                        showNotification("فشل تحديث الملف الشخصي", "error");
+                      }
                     }
-                  }
-                }}
-                onDeleteUser={(uid) => deleteItem("users", uid)}
-                onUpdateUserRole={(uid, role) => updateDoc(doc(db, "users", uid), { role })}
-                onNavigate={handleNavigate}
-                isTournamentsHidden={competitionSettings.find(s => s.id === 'global')?.isTournamentsHidden || false}
-                onToggleTournaments={handleToggleTournaments}
-                isCommentsEnabled={competitionSettings.find(s => s.id === 'global')?.isCommentsEnabled !== false}
-                onToggleComments={handleToggleComments}
-                competitionSettings={competitionSettings}
-                onUpdateCompetitionSettings={handleUpdateCompetitionSettings}
-                isUpdatingSettings={isUpdatingSettings}
-                onSyncData={async (type) => {
-                  if (type === 'weapons') await handleSyncWeapons();
-                  if (type === 'attachments') await handleSyncAttachments();
-                  if (type === 'characters') await handleSyncCharacters();
-                  if (type === 'players') await handleSyncProPlayers();
-                }}
-                isLogoHidden={competitionSettings.find(s => s.id === 'global')?.isLogoHidden || false}
-                onToggleLogo={handleToggleLogo}
-              />
+                  }}
+                  onDeleteUser={(uid) => deleteItem("users", uid)}
+                  onUpdateUserRole={(uid, role) => updateDoc(doc(db, "users", uid), { role })}
+                  onNavigate={handleNavigate}
+                  isTournamentsHidden={competitionSettings.find(s => s.id === 'global')?.isTournamentsHidden || false}
+                  onToggleTournaments={handleToggleTournaments}
+                  isCommentsEnabled={competitionSettings.find(s => s.id === 'global')?.isCommentsEnabled !== false}
+                  onToggleComments={handleToggleComments}
+                  competitionSettings={competitionSettings}
+                  onUpdateCompetitionSettings={handleUpdateCompetitionSettings}
+                  isUpdatingSettings={isUpdatingSettings}
+                  onSyncData={async (type) => {
+                    if (type === 'weapons') await handleSyncWeapons();
+                    if (type === 'attachments') await handleSyncAttachments();
+                    if (type === 'characters') await handleSyncCharacters();
+                    if (type === 'players') await handleSyncProPlayers();
+                  }}
+                  isLogoHidden={competitionSettings.find(s => s.id === 'global')?.isLogoHidden || false}
+                  onToggleLogo={handleToggleLogo}
+                />
+              </Suspense>
             )
           ) : activeTab === "home" ? (
             <motion.div
@@ -4408,7 +4360,7 @@ function AppContent() {
                           <select
                             value={selectedWeapon?.id || ""}
                             onChange={(e) => {
-                              const weapon = WEAPONS.find(
+                              const weapon = currentWeapons.find(
                                 (w) => w.id === e.target.value
                               );
                               if (weapon) setSelectedWeapon(weapon);
@@ -4419,7 +4371,7 @@ function AppContent() {
                             <option value="" className="bg-bg-dark">
                               بدون سلاح محدد
                             </option>
-                            {WEAPONS.map((weapon) => (
+                            {currentWeapons.map((weapon) => (
                               <option
                                 key={weapon.id}
                                 value={weapon.id}
@@ -5072,6 +5024,8 @@ function AppContent() {
                     <span>
                       {featuresCategory === "characters"
                         ? "الشخصيات"
+                        : featuresCategory === "weapons"
+                        ? "الأسلحة"
                         : "قطع الأسلحة"}
                     </span>
                   </button>
@@ -5097,6 +5051,20 @@ function AppContent() {
                         >
                           الشخصيات
                           <Users size={16} />
+                        </button>
+                        <button
+                          onClick={() => {
+                            setFeaturesCategory("weapons");
+                            setIsFeaturesCategoryDropdownOpen(false);
+                          }}
+                          className={`w-full px-6 py-3 text-right font-bold transition-all flex items-center justify-end gap-3 ${
+                            featuresCategory === "weapons"
+                              ? "bg-primary/10 text-primary"
+                              : "text-slate-400 hover:bg-white/5 hover:text-white"
+                          }`}
+                        >
+                          الأسلحة
+                          <Crosshair size={16} />
                         </button>
                         <button
                           onClick={() => {
@@ -5194,6 +5162,28 @@ function AppContent() {
                               className="w-full h-full group-hover:scale-110 transition-transform duration-500"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-bg-card via-transparent to-transparent" />
+                            <div className="absolute top-4 right-4 flex gap-2">
+                              {isAdmin && (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setEditingContentData(char);
+                                      setIsEditingCharacter(char.id);
+                                      setIsAddingContent("character");
+                                    }}
+                                    className="p-2 rounded-lg bg-black/50 text-primary hover:bg-primary hover:text-black transition-all backdrop-blur-md z-10"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteItem("characters", char.id)}
+                                    className="p-2 rounded-lg bg-black/50 text-red-500 hover:bg-red-500 hover:text-white transition-all backdrop-blur-md z-10"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </>
+                              )}
+                            </div>
                             <div className="absolute bottom-4 right-4 left-4 flex justify-between items-end">
                               <div>
                                 <h3 className="text-2xl font-bold text-white">
@@ -5237,6 +5227,169 @@ function AppContent() {
                         </motion.div>
                       )
                     )}
+                  </div>
+                </div>
+              ) : featuresCategory === "weapons" ? (
+                <div className="space-y-12">
+                  <div className="max-w-md mx-auto">
+                    <label className="block text-sm font-bold text-slate-500 mb-3 text-center uppercase tracking-widest">
+                      اختر السلاح
+                    </label>
+                    <div
+                      className="relative"
+                      onMouseLeave={() => setIsWeaponDropdownOpen && setIsWeaponDropdownOpen(false)}
+                    >
+                      <button
+                        onMouseEnter={() => setIsWeaponDropdownOpen && setIsWeaponDropdownOpen(true)}
+                        onClick={() =>
+                          setIsWeaponDropdownOpen && setIsWeaponDropdownOpen(!isWeaponDropdownOpen)
+                        }
+                        className="w-full bg-white/5 border border-white/10 rounded-2xl px-6 py-4 text-white font-bold flex items-center justify-between hover:border-primary transition-all cursor-pointer"
+                      >
+                        <ChevronDown
+                          size={24}
+                          className={`text-slate-500 transition-transform duration-300 ${
+                            isWeaponDropdownOpen ? "rotate-180" : ""
+                          }`}
+                        />
+                        <span>
+                          {currentWeapons.find(
+                            (w) => w.id === selectedWeaponId
+                          )?.nameAr || "اختر السلاح"}
+                        </span>
+                      </button>
+
+                      <AnimatePresence>
+                        {isWeaponDropdownOpen && (
+                          <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className="md:absolute relative mt-2 md:top-full left-0 right-0 bg-slate-900 border border-white/10 rounded-xl shadow-2xl md:z-20 md:overflow-hidden py-2 md:max-h-[300px] md:overflow-y-auto custom-scrollbar"
+                          >
+                            {Object.entries(groupedWeapons).map(
+                              ([type, wpns]) => (
+                                <div key={type}>
+                                  <div className="px-6 py-2 text-[10px] uppercase font-bold tracking-widest text-primary bg-white/5 border-y border-white/5 text-right">
+                                    {categoryNames[type] || type}
+                                  </div>
+                                  {wpns.map((wpn) => (
+                                    <button
+                                      key={wpn.id}
+                                      onClick={() => {
+                                        setSelectedWeaponId(wpn.id);
+                                        if (setIsWeaponDropdownOpen) setIsWeaponDropdownOpen(false);
+                                      }}
+                                      className={`w-full px-6 py-3 text-right font-bold transition-all flex items-center justify-end gap-3 ${
+                                        selectedWeaponId === wpn.id
+                                          ? "bg-primary/10 text-primary"
+                                          : "text-slate-400 hover:bg-white/5 hover:text-white"
+                                      }`}
+                                    >
+                                      {wpn.nameAr}
+                                    </button>
+                                  ))}
+                                </div>
+                              )
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-center flex-wrap gap-8">
+                    {currentWeapons
+                      .filter((w) => w.id === selectedWeaponId)
+                      .map((wpn) => (
+                        <motion.div
+                          key={wpn.id}
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="pro-card overflow-hidden group border-white/5 max-w-md w-full"
+                        >
+                          <div className="relative h-48 overflow-hidden bg-white/5 flex items-center justify-center p-8">
+                            <GameImage
+                              src={wpn.image}
+                              alt={wpn.nameAr}
+                              className="w-full h-full group-hover:scale-110 transition-transform duration-500 object-contain"
+                            />
+                            <div className="absolute top-4 right-4 flex gap-2">
+                              {isAdmin && (
+                                <>
+                                  <button
+                                    onClick={() => {
+                                      setEditingContentData(wpn);
+                                      setIsEditingWeapon(wpn.id);
+                                      setIsAddingContent("weapon");
+                                    }}
+                                    className="p-2 rounded-lg bg-black/50 text-primary hover:bg-primary hover:text-black transition-all backdrop-blur-md"
+                                  >
+                                    <Pencil size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteItem("weapons", wpn.id)}
+                                    className="p-2 rounded-lg bg-black/50 text-red-500 hover:bg-red-500 hover:text-white transition-all backdrop-blur-md"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                </>
+                              )}
+                              <div className="px-3 py-1 rounded-full bg-white/10 border border-white/10 backdrop-blur-md text-slate-300 text-[10px] font-bold uppercase">
+                                {wpn.type}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="p-6">
+                            <div className="flex justify-between items-center mb-2">
+                              <h3 className="text-xl font-bold text-white">
+                                {wpn.nameAr}
+                              </h3>
+                              <span className="text-xs text-slate-400 font-bold uppercase">
+                                {wpn.nameEn}
+                              </span>
+                            </div>
+                            <div className="space-y-3 mt-4">
+                              <div>
+                                <div className="flex justify-between text-xs font-bold text-slate-400 mb-1">
+                                  <span>الضرر</span>
+                                  <span className="text-white">{wpn.damage}</span>
+                                </div>
+                                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-red-500 rounded-full"
+                                    style={{ width: `${wpn.damage}%` }}
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <div className="flex justify-between text-xs font-bold text-slate-400 mb-1">
+                                  <span>سرعة الطلقة</span>
+                                  <span className="text-white">{wpn.speed}</span>
+                                </div>
+                                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-blue-500 rounded-full"
+                                    style={{ width: `${wpn.speed}%` }}
+                                  />
+                                </div>
+                              </div>
+                              <div>
+                                <div className="flex justify-between text-xs font-bold text-slate-400 mb-1">
+                                  <span>المدى</span>
+                                  <span className="text-white">{wpn.range}</span>
+                                </div>
+                                <div className="h-1.5 bg-white/5 rounded-full overflow-hidden">
+                                  <div
+                                    className="h-full bg-green-500 rounded-full"
+                                    style={{ width: `${wpn.range}%` }}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </motion.div>
+                      ))}
                   </div>
                 </div>
               ) : (
@@ -5309,7 +5462,7 @@ function AppContent() {
                   </div>
 
                   <div className="space-y-8">
-                    {isAdmin && dbAttachments.length === 0 && (
+                    {isAdmin && dbAttachments.length < ATTACHMENTS.length && (
                       <div className="flex justify-center">
                         <button
                           onClick={seedAttachments}
@@ -5322,7 +5475,7 @@ function AppContent() {
                     )}
 
                     <div className="flex justify-center">
-                      {(dbAttachments.length > 0 ? dbAttachments : ATTACHMENTS)
+                      {currentAttachments
                         .filter((a) => a.id === selectedAttachmentId)
                         .map((item) => (
                           <motion.div
@@ -5339,15 +5492,24 @@ function AppContent() {
                               />
                               <div className="absolute top-4 right-4 flex gap-2">
                                 {isAdmin && (
-                                  <button
-                                    onClick={() => {
-                                      setIsEditingAttachment(item.id);
-                                      setEditAttachmentImage(item.image);
-                                    }}
-                                    className="p-2 rounded-lg bg-black/50 text-primary hover:bg-primary hover:text-black transition-all backdrop-blur-md"
-                                  >
-                                    <Pencil size={14} />
-                                  </button>
+                                  <>
+                                    <button
+                                      onClick={() => {
+                                        setEditingContentData(item);
+                                        setIsEditingAttachment(item.id);
+                                        setIsAddingContent("attachment");
+                                      }}
+                                      className="p-2 rounded-lg bg-black/50 text-primary hover:bg-primary hover:text-black transition-all backdrop-blur-md"
+                                    >
+                                      <Pencil size={14} />
+                                    </button>
+                                    <button
+                                      onClick={() => deleteItem("attachments", item.id)}
+                                      className="p-2 rounded-lg bg-black/50 text-red-500 hover:bg-red-500 hover:text-white transition-all backdrop-blur-md"
+                                    >
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </>
                                 )}
                                 <div className="px-3 py-1 rounded-full bg-white/10 border border-white/10 backdrop-blur-md text-slate-300 text-[10px] font-bold uppercase">
                                   {item.type}
@@ -5359,60 +5521,8 @@ function AppContent() {
                                 {item.arabicName}
                               </h3>
 
-                              {isEditingAttachment === item.id ? (
-                                <div className="space-y-4 mt-4">
-                                  <div>
-                                    <label className="text-[10px] text-slate-500 font-bold uppercase mb-1 block">
-                                      رابط الصورة الجديد
-                                    </label>
-                                    <div className="flex gap-2">
-                                      <input
-                                        type="text"
-                                        value={editAttachmentImage}
-                                        onChange={(e) =>
-                                          setEditAttachmentImage(e.target.value)
-                                        }
-                                        className="flex-1 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary"
-                                        placeholder="https://..."
-                                      />
-                                      <label className="p-2 bg-white/5 border border-white/10 rounded-lg text-slate-400 hover:text-primary cursor-pointer transition-all">
-                                        <Upload size={18} />
-                                        <input
-                                          type="file"
-                                          className="hidden"
-                                          accept="image/*"
-                                          onChange={(e) =>
-                                            handleFileChange(e, "attachment")
-                                          }
-                                        />
-                                      </label>
-                                    </div>
-                                    <p className="text-[9px] text-slate-500 mt-1">
-                                      يمكنك إدخال رابط أو رفع صورة مباشرة.
-                                    </p>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={() =>
-                                        handleUpdateAttachmentImage(item.id)
-                                      }
-                                      className="flex-1 bg-primary text-black py-2 rounded-lg text-xs font-bold hover:bg-white transition-colors"
-                                    >
-                                      حفظ التعديل
-                                    </button>
-                                    <button
-                                      onClick={() =>
-                                        setIsEditingAttachment(null)
-                                      }
-                                      className="px-4 bg-white/5 text-slate-400 py-2 rounded-lg text-xs font-bold hover:bg-white/10 transition-colors"
-                                    >
-                                      إلغاء
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <div className="flex items-center gap-2 text-primary mb-3">
+                              <>
+                                <div className="flex items-center gap-2 text-primary mb-3">
                                     <Zap size={16} />
                                     <span className="text-sm font-bold">
                                       {item.effect}
@@ -5432,7 +5542,6 @@ function AppContent() {
                                     </div>
                                   </div>
                                 </>
-                              )}
                             </div>
                           </motion.div>
                         ))}
@@ -5502,7 +5611,7 @@ function AppContent() {
                 </div>
 
                 <div className="flex justify-center">
-                  {WEAPONS.filter((w) => w.id === selectedLoadoutWeaponId).map(
+                  {currentWeapons.filter((w) => w.id === selectedLoadoutWeaponId).map(
                     (weapon) => (
                       <motion.div
                         key={weapon.id}
@@ -5570,17 +5679,17 @@ function AppContent() {
                             {weapon.bestAttachments?.muzzle && (
                               <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-primary/20 transition-all">
                                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary overflow-hidden">
-                                  {ATTACHMENTS.find(
+                                  {currentAttachments.find(
                                     (a) =>
                                       a.id === weapon.bestAttachments?.muzzle
                                   )?.image ? (
                                     <GameImage
                                       src={
-                                        ATTACHMENTS.find(
+                                        currentAttachments.find(
                                           (a) =>
                                             a.id ===
                                             weapon.bestAttachments?.muzzle
-                                        )?.image
+                                        )?.image || ""
                                       }
                                       alt="Muzzle"
                                       className="w-8 h-8"
@@ -5594,7 +5703,7 @@ function AppContent() {
                                     Muzzle
                                   </p>
                                   <p className="text-sm font-bold text-white">
-                                    {ATTACHMENTS.find(
+                                    {currentAttachments.find(
                                       (a) =>
                                         a.id === weapon.bestAttachments?.muzzle
                                     )?.arabicName ||
@@ -5606,16 +5715,16 @@ function AppContent() {
                             {weapon.bestAttachments?.grip && (
                               <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-primary/20 transition-all">
                                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary overflow-hidden">
-                                  {ATTACHMENTS.find(
+                                  {currentAttachments.find(
                                     (a) => a.id === weapon.bestAttachments?.grip
                                   )?.image ? (
                                     <GameImage
                                       src={
-                                        ATTACHMENTS.find(
+                                        currentAttachments.find(
                                           (a) =>
                                             a.id ===
                                             weapon.bestAttachments?.grip
-                                        )?.image
+                                        )?.image || ""
                                       }
                                       alt="Grip"
                                       className="w-8 h-8"
@@ -5629,7 +5738,7 @@ function AppContent() {
                                     Grip
                                   </p>
                                   <p className="text-sm font-bold text-white">
-                                    {ATTACHMENTS.find(
+                                    {currentAttachments.find(
                                       (a) =>
                                         a.id === weapon.bestAttachments?.grip
                                     )?.arabicName ||
@@ -5641,17 +5750,17 @@ function AppContent() {
                             {weapon.bestAttachments?.magazine && (
                               <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-primary/20 transition-all">
                                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary overflow-hidden">
-                                  {ATTACHMENTS.find(
+                                  {currentAttachments.find(
                                     (a) =>
                                       a.id === weapon.bestAttachments?.magazine
                                   )?.image ? (
                                     <GameImage
                                       src={
-                                        ATTACHMENTS.find(
+                                        currentAttachments.find(
                                           (a) =>
                                             a.id ===
                                             weapon.bestAttachments?.magazine
-                                        )?.image
+                                        )?.image || ""
                                       }
                                       alt="Magazine"
                                       className="w-8 h-8"
@@ -5665,7 +5774,7 @@ function AppContent() {
                                     Magazine
                                   </p>
                                   <p className="text-sm font-bold text-white">
-                                    {ATTACHMENTS.find(
+                                    {currentAttachments.find(
                                       (a) =>
                                         a.id ===
                                         weapon.bestAttachments?.magazine
@@ -5678,17 +5787,17 @@ function AppContent() {
                             {weapon.bestAttachments?.stock && (
                               <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-primary/20 transition-all">
                                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary overflow-hidden">
-                                  {ATTACHMENTS.find(
+                                  {currentAttachments.find(
                                     (a) =>
                                       a.id === weapon.bestAttachments?.stock
                                   )?.image ? (
                                     <GameImage
                                       src={
-                                        ATTACHMENTS.find(
+                                        currentAttachments.find(
                                           (a) =>
                                             a.id ===
                                             weapon.bestAttachments?.stock
-                                        )?.image
+                                        )?.image || ""
                                       }
                                       alt="Stock"
                                       className="w-8 h-8"
@@ -5702,7 +5811,7 @@ function AppContent() {
                                     Stock
                                   </p>
                                   <p className="text-sm font-bold text-white">
-                                    {ATTACHMENTS.find(
+                                    {currentAttachments.find(
                                       (a) =>
                                         a.id === weapon.bestAttachments?.stock
                                     )?.arabicName ||
@@ -5714,17 +5823,17 @@ function AppContent() {
                             {weapon.bestAttachments?.scope && (
                               <div className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/5 hover:border-primary/20 transition-all">
                                 <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center text-primary overflow-hidden">
-                                  {ATTACHMENTS.find(
+                                  {currentAttachments.find(
                                     (a) =>
                                       a.id === weapon.bestAttachments?.scope
                                   )?.image ? (
                                     <GameImage
                                       src={
-                                        ATTACHMENTS.find(
+                                        currentAttachments.find(
                                           (a) =>
                                             a.id ===
                                             weapon.bestAttachments?.scope
-                                        )?.image
+                                        )?.image || ""
                                       }
                                       alt="Scope"
                                       className="w-8 h-8"
@@ -5738,7 +5847,7 @@ function AppContent() {
                                     Scope
                                   </p>
                                   <p className="text-sm font-bold text-white">
-                                    {ATTACHMENTS.find(
+                                    {currentAttachments.find(
                                       (a) =>
                                         a.id === weapon.bestAttachments?.scope
                                     )?.arabicName ||
@@ -7733,165 +7842,9 @@ function AppContent() {
               <SubtleAdBanner />
             </motion.div>
           ) : activeTab === "calculator" ? (
-            <motion.div
-              key="calculator"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -20 }}
-              className="max-w-4xl mx-auto"
-            >
-              <div className="text-center mb-12">
-                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-[10px] font-bold uppercase tracking-widest mb-4">
-                  <Trophy size={12} />
-                  حاسبة الطريق إلى الكونكر
-                </div>
-                <h2 className="text-3xl md:text-4xl font-bold mb-4">
-                  احسب نقاطك المتبقية للكونكر
-                </h2>
-                <p className="text-slate-400 max-w-2xl mx-auto">
-                  أدخل نقاطك الحالية وترتيبك لنخبرك كم تحتاج للوصول إلى تقييم
-                  "الغازي" (Conqueror) بناءً على متوسط التقييمات الحالية.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
-                {/* Inputs */}
-                <div className="pro-card p-8 space-y-6">
-                  <div className="space-y-4">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">
-                      نقاطك الحالية
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={calcPoints}
-                        onChange={(e) => setCalcPoints(Number(e.target.value))}
-                        className="w-full bg-black/20 border border-white/10 rounded-xl px-5 py-4 text-white focus:outline-none focus:border-primary transition-all pr-12"
-                        placeholder="مثال: 4200"
-                      />
-                      <Zap
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-primary"
-                        size={20}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">
-                      ترتيبك الحالي (اختياري)
-                    </label>
-                    <div className="relative">
-                      <input
-                        type="number"
-                        value={calcRank}
-                        onChange={(e) => setCalcRank(Number(e.target.value))}
-                        className="w-full bg-black/20 border border-white/10 rounded-xl px-5 py-4 text-white focus:outline-none focus:border-primary transition-all pr-12"
-                        placeholder="مثال: 1500"
-                      />
-                      <Users
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500"
-                        size={20}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="p-4 bg-primary/5 border border-primary/10 rounded-xl">
-                    <div className="flex items-start gap-3">
-                      <div className="p-2 bg-primary/20 rounded-lg text-primary">
-                        <Activity size={18} />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-white mb-1">
-                          معلومة هامة
-                        </p>
-                        <p className="text-[10px] text-slate-400 leading-relaxed">
-                          تقييم الكونكر يتطلب الوصول لتقييم "الآس" (4200 نقطة)
-                          وأن تكون ضمن أفضل 500 لاعب في منطقتك. التقييم المقدر
-                          حالياً هو 6200 نقطة.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Results */}
-                <div className="pro-card p-8 bg-gradient-to-br from-bg-card to-primary/5 border-primary/20">
-                  <h3 className="text-xl font-bold mb-8 flex items-center gap-2">
-                    <Sparkles className="text-primary" size={20} /> النتيجة
-                    المتوقعة
-                  </h3>
-
-                  <div className="space-y-8">
-                    <div className="text-center p-6 bg-black/20 rounded-2xl border border-white/5">
-                      <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">
-                        النقاط المتبقية
-                      </p>
-                      <div className="text-5xl font-black text-primary mb-2">
-                        {Math.max(0, 6200 - calcPoints)}
-                      </div>
-                      <p className="text-sm text-slate-400">
-                        نقطة للوصول للهدف
-                      </p>
-                    </div>
-
-                    <div className="space-y-4">
-                      <div className="flex justify-between items-end">
-                        <div>
-                          <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">
-                            التقدم الحالي
-                          </p>
-                          <p className="text-lg font-bold text-white">
-                            {calcPoints >= 6200
-                              ? "أنت في منطقة الكونكر!"
-                              : calcPoints >= 4200
-                              ? "أنت في تقييم الآس"
-                              : "في طريقك للآس"}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-2xl font-black text-primary">
-                            {Math.min(
-                              100,
-                              Math.round((calcPoints / 6200) * 100)
-                            )}
-                            %
-                          </p>
-                        </div>
-                      </div>
-                      <div className="h-3 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                        <motion.div
-                          initial={{ width: 0 }}
-                          animate={{
-                            width: `${Math.min(
-                              100,
-                              (calcPoints / 6200) * 100
-                            )}%`,
-                          }}
-                          className="h-full bg-gradient-to-r from-primary/50 to-primary shadow-[0_0_15px_rgba(255,184,0,0.3)]"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-                        <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">
-                          الهدف المقدر
-                        </p>
-                        <p className="text-lg font-bold text-white">6200</p>
-                      </div>
-                      <div className="p-4 bg-white/5 rounded-xl border border-white/5">
-                        <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">
-                          الترتيب المطلوب
-                        </p>
-                        <p className="text-lg font-bold text-white">Top 500</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <SubtleAdBanner />
-            </motion.div>
+            <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+              <ConquerorCalculator SubtleAdBanner={SubtleAdBanner} />
+            </Suspense>
           ) : activeTab === "news" ? (
             <motion.div
               key="news"
@@ -8347,10 +8300,10 @@ function AppContent() {
               >
                 <div className="flex justify-between items-center mb-8">
                   <h3 className="text-2xl font-black flex items-center gap-3">
-                    <Plus className="text-primary" size={24} />
-                    إضافة {isAddingContent === 'weapon' ? 'سلاح' : isAddingContent === 'attachment' ? 'ملحق' : isAddingContent === 'character' ? 'شخصية' : 'لاعب محترف'} جديد
+                    {isEditingWeapon || isEditingAttachment || isEditingCharacter || isEditingProPlayer ? <Pencil className="text-primary" size={24} /> : <Plus className="text-primary" size={24} />}
+                    {isEditingWeapon || isEditingAttachment || isEditingCharacter || isEditingProPlayer ? 'تعديل ' : 'إضافة '} {isAddingContent === 'weapon' ? 'السلاح' : isAddingContent === 'attachment' ? 'الملحق' : isAddingContent === 'character' ? 'الشخصية' : 'اللاعب المحترف'}
                   </h3>
-                  <button onClick={() => setIsAddingContent(null)} className="text-slate-400 hover:text-white">
+                  <button onClick={() => { setIsAddingContent(null); setIsEditingWeapon(null); setIsEditingAttachment(null); setIsEditingCharacter(null); setIsEditingProPlayer(null); }} className="text-slate-400 hover:text-white">
                     <X size={24} />
                   </button>
                 </div>
@@ -8472,7 +8425,7 @@ function AppContent() {
                     <span>حفظ البيانات</span>
                   </button>
                   <button
-                    onClick={() => setIsAddingContent(null)}
+                    onClick={() => { setIsAddingContent(null); setIsEditingWeapon(null); setIsEditingAttachment(null); setIsEditingCharacter(null); setIsEditingProPlayer(null); }}
                     className="px-8 py-4 rounded-2xl bg-white/5 border border-white/10 text-white font-bold hover:bg-white/10 transition-all"
                   >
                     إلغاء
@@ -8482,303 +8435,7 @@ function AppContent() {
             </div>
           )}
 
-          {isEditingWeapon && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="pro-card p-8 max-w-md w-full border-primary/20"
-              >
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-xl font-bold flex items-center gap-2">
-                    <Pencil className="text-primary" size={20} /> تحديث صورة السلاح
-                  </h3>
-                  <button
-                    onClick={() => setIsEditingWeapon(null)}
-                    className="text-slate-400 hover:text-white"
-                  >
-                    <Plus className="rotate-45" size={24} />
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  <div className="p-4 bg-slate-800/50 rounded-xl mb-4 flex items-center justify-center min-h-[120px]">
-                    {editWeaponImage ? (
-                      <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
-                        <GameImage
-                          src={editWeaponImage}
-                          alt="Preview"
-                          className="max-h-24"
-                        />
-                      </div>
-                    ) : (
-                      <div className="text-slate-600 flex flex-col items-center gap-2">
-                        <Crosshair size={32} />
-                        <span className="text-[10px] uppercase font-bold tracking-widest">
-                          لا توجد صورة
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-2 font-bold uppercase">
-                      رابط الصورة الجديد
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={editWeaponImage}
-                        onChange={(e) => setEditWeaponImage(e.target.value)}
-                        placeholder="https://..."
-                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-primary transition-colors"
-                      />
-                      <label className="p-3 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-primary cursor-pointer transition-all flex items-center justify-center">
-                        <Upload size={20} />
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept="image/*"
-                          onChange={(e) => handleFileChange(e, "weapon")}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleUpdateWeaponImage}
-                    className="w-full bg-primary text-black font-bold py-3 rounded-xl hover:bg-white transition-colors mt-4"
-                  >
-                    تحديث الصورة
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          )}
 
-          {isEditingAttachment && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="pro-card p-8 max-w-md w-full border-primary/20"
-              >
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-xl font-bold flex items-center gap-2">
-                    <Pencil className="text-primary" size={20} /> تحديث صورة الملحق
-                  </h3>
-                  <button
-                    onClick={() => setIsEditingAttachment(null)}
-                    className="text-slate-400 hover:text-white"
-                  >
-                    <Plus className="rotate-45" size={24} />
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  <div className="p-4 bg-slate-800/50 rounded-xl mb-4 flex items-center justify-center min-h-[120px]">
-                    {editAttachmentImage ? (
-                      <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
-                        <GameImage
-                          src={editAttachmentImage}
-                          alt="Preview"
-                          className="max-h-24"
-                        />
-                      </div>
-                    ) : (
-                      <div className="text-slate-600 flex flex-col items-center gap-2">
-                        <Settings2 size={32} />
-                        <span className="text-[10px] uppercase font-bold tracking-widest">
-                          لا توجد صورة
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-2 font-bold uppercase">
-                      رابط الصورة الجديد
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={editAttachmentImage}
-                        onChange={(e) => setEditAttachmentImage(e.target.value)}
-                        placeholder="https://..."
-                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-primary transition-colors"
-                      />
-                      <label className="p-3 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-primary cursor-pointer transition-all flex items-center justify-center">
-                        <Upload size={20} />
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept="image/*"
-                          onChange={(e) => handleFileChange(e, "attachment")}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      try {
-                        await updateDoc(doc(db, "attachments", isEditingAttachment), {
-                          image: editAttachmentImage,
-                        });
-                        showNotification("تم تحديث صورة الملحق", "success");
-                        setIsEditingAttachment(null);
-                      } catch (error) {
-                        handleFirestoreError(error, OperationType.UPDATE, `attachments/${isEditingAttachment}`);
-                      }
-                    }}
-                    className="w-full bg-primary text-black font-bold py-3 rounded-xl hover:bg-white transition-colors mt-4"
-                  >
-                    تحديث الصورة
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-
-          {isEditingCharacter && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="pro-card p-8 max-w-md w-full border-primary/20"
-              >
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-xl font-bold flex items-center gap-2">
-                    <Pencil className="text-primary" size={20} /> تحديث صورة الشخصية
-                  </h3>
-                  <button
-                    onClick={() => setIsEditingCharacter(null)}
-                    className="text-slate-400 hover:text-white"
-                  >
-                    <Plus className="rotate-45" size={24} />
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  <div className="p-4 bg-slate-800/50 rounded-xl mb-4 flex items-center justify-center min-h-[120px]">
-                    {editCharacterImage ? (
-                      <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
-                        <GameImage
-                          src={editCharacterImage}
-                          alt="Preview"
-                          className="max-h-24"
-                        />
-                      </div>
-                    ) : (
-                      <div className="text-slate-600 flex flex-col items-center gap-2">
-                        <UserIcon size={32} />
-                        <span className="text-[10px] uppercase font-bold tracking-widest">
-                          لا توجد صورة
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-2 font-bold uppercase">
-                      رابط الصورة الجديد
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={editCharacterImage}
-                        onChange={(e) => setEditCharacterImage(e.target.value)}
-                        placeholder="https://..."
-                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-primary transition-colors"
-                      />
-                      <label className="p-3 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-primary cursor-pointer transition-all flex items-center justify-center">
-                        <Upload size={20} />
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept="image/*"
-                          onChange={(e) => handleFileChange(e, "character")}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleUpdateCharacterImage}
-                    className="w-full bg-primary text-black font-bold py-3 rounded-xl hover:bg-white transition-colors mt-4"
-                  >
-                    تحديث الصورة
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          )}
-
-          {isEditingProPlayer && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-6">
-              <motion.div
-                initial={{ opacity: 0, scale: 0.9 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.9 }}
-                className="pro-card p-8 max-w-md w-full border-primary/20"
-              >
-                <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-xl font-bold flex items-center gap-2">
-                    <Pencil className="text-primary" size={20} /> تحديث صورة اللاعب
-                  </h3>
-                  <button
-                    onClick={() => setIsEditingProPlayer(null)}
-                    className="text-slate-400 hover:text-white"
-                  >
-                    <Plus className="rotate-45" size={24} />
-                  </button>
-                </div>
-                <div className="space-y-4">
-                  <div className="p-4 bg-slate-800/50 rounded-xl mb-4 flex items-center justify-center min-h-[120px]">
-                    {editProPlayerImage ? (
-                      <div className="p-4 bg-white/5 border border-white/10 rounded-xl">
-                        <GameImage
-                          src={editProPlayerImage}
-                          alt="Preview"
-                          className="max-h-24"
-                        />
-                      </div>
-                    ) : (
-                      <div className="text-slate-600 flex flex-col items-center gap-2">
-                        <Trophy size={32} />
-                        <span className="text-[10px] uppercase font-bold tracking-widest">
-                          لا توجد صورة
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <label className="block text-xs text-slate-400 mb-2 font-bold uppercase">
-                      رابط الصورة الجديد
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={editProPlayerImage}
-                        onChange={(e) => setEditProPlayerImage(e.target.value)}
-                        placeholder="https://..."
-                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-primary transition-colors"
-                      />
-                      <label className="p-3 bg-white/5 border border-white/10 rounded-xl text-slate-400 hover:text-primary cursor-pointer transition-all flex items-center justify-center">
-                        <Upload size={20} />
-                        <input
-                          type="file"
-                          className="hidden"
-                          accept="image/*"
-                          onChange={(e) => handleFileChange(e, "proPlayer")}
-                        />
-                      </label>
-                    </div>
-                  </div>
-                  <button
-                    onClick={handleUpdateProPlayerImage}
-                    className="w-full bg-primary text-black font-bold py-3 rounded-xl hover:bg-white transition-colors mt-4"
-                  >
-                    تحديث الصورة
-                  </button>
-                </div>
-              </motion.div>
-            </div>
-          )}
         </AnimatePresence>
 
         <AnimatePresence>
@@ -9724,20 +9381,22 @@ function AppContent() {
           </p>
         </div>
       </footer>
-      <Chatbot
-        weapons={WEAPONS}
-        rankings={rankings}
-        events={events}
-        giveaways={giveaways}
-      />
-      <AuthModal
-        isOpen={isAuthModalOpen}
-        onClose={() => setIsAuthModalOpen(false)}
-        showNotification={showNotification}
-        onLoginSuccess={handleLoginSuccess}
-        activeTab={authTab}
-        setActiveTab={setAuthTab}
-      />
+      <Suspense fallback={null}>
+        <Chatbot
+          weapons={currentWeapons}
+          rankings={rankings}
+          events={events}
+          giveaways={giveaways}
+        />
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          showNotification={showNotification}
+          onLoginSuccess={handleLoginSuccess}
+          activeTab={authTab}
+          setActiveTab={setAuthTab}
+        />
+      </Suspense>
     </div>
   );
 }
