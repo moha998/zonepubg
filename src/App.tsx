@@ -291,6 +291,7 @@ type ComparisonAdvice = {
   mobileAdvice: string;
   source: string;
   updatedAt: string;
+  proTip?: string;
 };
 
 function getWeaponValue(
@@ -542,11 +543,33 @@ function buildComparisonAdvice(
     ? `على الجوال، ${n1} و${n2} متساويان في الارتداد (${r1}/100 لكليهما). يفضّل تجربة حساسية مستقرة دون مبالغة في الرفع.`
     : `على الجوال، ${recoilWinner} (ارتداد ${minR}/100) أنسب وأسهل في التحكم بفارق ${recoilGap} نقطة. إذا استخدمت ${recoilLoser} (ارتداد ${maxR}/100) فقلل الحساسية قليلًا لتعويض الاهتزاز الأعلى أثناء الرش.`;
 
+  // توليد نصيحة للخبراء بناءً على الدمج بين السلاحين المختاريْن
+  let proTip = "نصيحة الخبراء: ركز دائماً على توظيف فئة السلاح في مكانها الصحيح، واتخذ السواتر الجيدة.";
+  
+  if (t1 === t2) {
+    proTip = `نصيحة الخبراء: بما أن السلاحين من نفس الفئة (${type1Label})، يُفضّل تزويد السلاح ذي الارتداد الأقل (${recoilWinner}) بمنظار عالي (مثلاً 4x أو 6x) للمواجهات المتوسطة والبعيدة، وترك الآخر للمواجهات القريبة بمنظار نقطة حمراء (Red Dot).`;
+  } else if (
+    (t1 === "Sniper" && ["AR", "SMG"].includes(t2)) || 
+    (t2 === "Sniper" && ["AR", "SMG"].includes(t1))
+  ) {
+    const sniperW = t1 === "Sniper" ? n1 : n2;
+    const autoW = t1 === "Sniper" ? n2 : n1;
+    proTip = `نصيحة الخبراء: تشكيلة قوية! احتفظ بـ ${autoW} للتمشيط والاقتحامات السريعة، واستخدم ${sniperW} مع منظار 8x للصيد الدقيق عن بُعد لاقتناص الأعداء بطلقة واحدة.`;
+  } else if (
+    (t1 === "Shotgun" && ["AR", "SMG", "LMG"].includes(t2)) || 
+    (t2 === "Shotgun" && ["AR", "SMG", "LMG"].includes(t1))
+  ) {
+    const sg = t1 === "Shotgun" ? n1 : n2;
+    const other = t1 === "Shotgun" ? n2 : n1;
+    proTip = `نصيحة الخبراء: اجعل ${sg} سلاحك السري داخل المباني والأزقة الضيقة للإسقاط الفوري، بينما تعتمد على ${other} للمسافات المفتوحة التي تتخطى 15 متراً.`;
+  }
+
   return {
     closeRange,
     longRange,
     tabletAdvice,
     mobileAdvice,
+    proTip,
     source: "بيانات constants.ts الحقيقية",
     updatedAt: new Date().toLocaleString("ar-SA"),
   };
@@ -560,6 +583,26 @@ export default function App() {
     </HelmetProvider>
   );
 }
+
+const getWeaponProTip = (weapon: Weapon): string => {
+  if (!weapon) return "";
+  
+  if (weapon.type === "AR") {
+    return `نصيحة الخبراء: يُفضل بيك (Peek) سريع واستخدام دمج الجيروسكوب لتقليل الارتداد الأفقي للـ ${weapon.nameEn}.`;
+  } else if (weapon.type === "Sniper") {
+    return `نصيحة الخبراء: سرعة رصاصة الـ ${weapon.nameEn} تتطلب منك التصويب قليلاً أعلى الهدف (Bullet Drop) في المسافات التي تتجاوز 250 متراً.`;
+  } else if (weapon.type === "SMG") {
+    return `نصيحة الخبراء: الـ ${weapon.nameEn} مدمر في الالتحامات (Hip-fire) فلا تضيع الوقت بفتح السكوب داخل الغرف.`;
+  } else if (weapon.type === "Shotgun") {
+    return `نصيحة الخبراء: حافظ على مسافة مترين إلى ثلاثة أمتار واضرب في منتصف الصدر لضمان دخول كل شظايا ${weapon.nameEn} في الخصم.`;
+  } else if (weapon.type === "LMG") {
+    return `نصيحة الخبراء: الانبطاح (Prone) أو الجلوس (Crouch) يقلل ارتداد ${weapon.nameEn} بنسبة تصل لـ 50%، مما يجعله مثالياً لتفجير السيارات.`;
+  } else if (weapon.type === "DMR") {
+    return `نصيحة الخبراء: اضبط فترة زمنية قصيرة جداً (نصف ثانية) بين الطقات بـ ${weapon.nameEn} ليتعافى الارتداد تلقائياً بدلاً من الإطلاق السريع العشوائي.`;
+  }
+  
+  return `نصيحة الخبراء: تدرب في ساحة التجمع (Cheer Park) لمعرفة سلوك الارتداد الخاص بـ ${weapon.nameEn} قبل استخدامه في التقييم.`;
+};
 
 const CountdownTimer = ({
   endDate,
@@ -5859,6 +5902,15 @@ function AppContent() {
                           </div>
                         </div>
 
+                        <div className="mb-6 p-4 rounded-xl bg-primary/10 border border-primary/20 shadow-inner">
+                          <div className="flex gap-3 items-start">
+                            <Zap className="text-primary mt-0.5 shrink-0" size={16} />
+                            <p className="text-xs font-bold text-slate-300 leading-relaxed">
+                              {getWeaponProTip(weapon as Weapon)}
+                            </p>
+                          </div>
+                        </div>
+
                         <button
                           onClick={() => {
                             setSelectedWeaponToRate(weapon);
@@ -7711,6 +7763,22 @@ function AppContent() {
                         </p>
                       </div>
                     </div>
+
+                    {comparisonAdvice?.proTip && (
+                      <div className="p-6 rounded-2xl bg-primary/10 border border-primary/20 flex gap-4 items-start shadow-xl shadow-primary/5">
+                        <div className="p-3 rounded-xl bg-primary/20 text-primary animate-pulse">
+                          <Sparkles size={24} />
+                        </div>
+                        <div>
+                          <span className="text-xs font-black text-primary uppercase tracking-widest block mb-1">
+                            نصيحة الخبراء والمحترفين
+                          </span>
+                          <p className="text-sm font-bold text-slate-300 leading-relaxed">
+                            {comparisonAdvice.proTip}
+                          </p>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="space-y-6">
                       <h4 className="text-sm font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
