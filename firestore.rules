@@ -1,0 +1,247 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required)
+    //   - displayName: string
+    //   - role: string (user | admin)
+    //   - status: string (active | disabled | suspended)
+    //   - isBanned: boolean
+    //   - createdAt: timestamp
+    //   - lastLoginAt: timestamp
+    //   - settings: map (camera, ads, gyroscope)
+    //
+    // Collection: events
+    // Fields:
+    //   - title: string (required)
+    //   - date: string (required)
+    //   - status: string (upcoming | ongoing | ended)
+    //   - isHidden: boolean
+    //   - authorEmail: string
+    //
+    // Collection: giveaways
+    // Fields:
+    //   - title: string (required)
+    //   - endDate: string (required)
+    //   - status: string (active | ended)
+    //   - authorEmail: string
+    //
+    // Collection: rankings
+    // Fields:
+    //   - rank: number (required)
+    //   - playerName: string (required)
+    //
+    // Collection: weaponRatings
+    // Fields:
+    //   - weaponId: string (required)
+    //   - rating: number (required)
+    //   - userId: string (required)
+    //
+    // Collection: competitionSettings
+    // Fields:
+    //   - isTournamentsHidden: boolean
+    //   - isLogoHidden: boolean
+    //   - isCommentsEnabled: boolean
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "eng.moha990@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    // ===============================================================
+    // Collection Rules
+    // ===============================================================
+
+    // Users Collection
+    match /users/{userId} {
+      function isValidUser(data) {
+        return data.uid is string &&
+               data.email is string && isValidEmail(data.email) &&
+               (data.role == 'user' || data.role == 'admin') &&
+               (data.status == 'active' || data.status == 'disabled' || data.status == 'suspended' || !('status' in data)) &&
+               (data.isBanned is bool || !('isBanned' in data));
+      }
+
+      allow read: if isAuthenticated();
+      
+      allow create: if isAuthenticated() && 
+                      isOwner(userId) && 
+                      isValidUser(request.resource.data) &&
+                      request.resource.data.role == 'user'; // Users can only create themselves as 'user'
+
+      allow update: if isAuthenticated() && (
+        // Admin can update anything
+        isAdmin() ||
+        // User can update their own profile but NOT their role or ban status
+        (isOwner(userId) && 
+         isValidUser(request.resource.data) &&
+         request.resource.data.role == resource.data.role &&
+         (!('isBanned' in request.resource.data) || request.resource.data.isBanned == resource.data.isBanned) &&
+         (!('status' in request.resource.data) || request.resource.data.status == resource.data.status))
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // Public Collections (Read for all, Write for Admin)
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /giveaways/{giveawayId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /rankings/{rankingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /weapons/{weaponId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /attachments/{attachmentId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /characters/{characterId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /devices/{deviceId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /players/{playerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /imageLibrary/{imageId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /ads/{adId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Clips Collection
+    match /clips/{clipId} {
+      function isValidClip(data) {
+        return data.title is string && data.title.size() > 0 && data.title.size() < 100 &&
+               data.url is string &&
+               data.authorId is string &&
+               data.votes is number;
+      }
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidClip(request.resource.data) && request.resource.data.authorId == request.auth.uid;
+      allow update: if isAuthenticated() && (
+        isAdmin() || 
+        (resource.data.authorId == request.auth.uid && isValidClip(request.resource.data)) ||
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes', 'voters'])) // Allow voting
+      );
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.authorId == request.auth.uid);
+    }
+
+    // Comments Collection
+    match /comments/{commentId} {
+      function isValidComment(data) {
+        return data.newsId is string &&
+               data.userId is string &&
+               data.content is string && data.content.size() > 0 && data.content.size() < 1000;
+      }
+      allow read: if true;
+      allow create: if isAuthenticated() && isValidComment(request.resource.data) && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && (isAdmin() || (resource.data.userId == request.auth.uid && isValidComment(request.resource.data)));
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+
+    // Giveaway Entries
+    match /giveawayEntries/{entryId} {
+      function isValidEntry(data) {
+        return data.giveawayId is string &&
+               data.userId is string &&
+               data.playerName is string &&
+               data.playerId is string;
+      }
+      allow read: if true; // Allow all to see participants if app requires it, or restrict to isAdmin()
+      allow create: if isAuthenticated() && isValidEntry(request.resource.data) && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Giveaway Winners
+    match /giveawayWinners/{winnerId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /sensitivityRatings/{ratingId} {
+      allow read: if true;
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+
+    // Settings and Stats
+    match /competitionSettings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /siteStats/{statsId} {
+      allow read: if true;
+      allow update: if isAdmin() || (
+        isAuthenticated() && 
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['totalParticipations', 'updatedAt'])
+      );
+      allow create, delete: if isAdmin();
+    }
+
+    // Weapon Ratings (Public read, User can create/update, Admin can delete)
+    match /weaponRatings/{ratingId} {
+      allow read: if true;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow delete: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+  }
+}

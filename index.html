@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <title>ببجيكوم - Pubgcom</title>
+    <meta name="description" content="المنصة رقم #1 للاعبي ببجي موبايل. إعدادات حساسية، أخبار، مقارنة أسلحة، وحاسبة كونكر." />
+    <!-- Preconnects to speed up resource loading -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- OG Tags -->
+    <meta property="og:title" content="ببجيكوم - Pubgcom" />
+    <meta property="og:description" content="المنصة رقم #1 للاعبي ببجي موبايل. إعدادات حساسية، أخبار، مقارنة أسلحة، وحاسبة كونكر." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://images.unsplash.com/photo-1542751371-adc38448a05e?q=80&w=1200&h=630&auto=format&fit=crop" />
+    <!-- Twitter Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="ببجيكوم - Pubgcom" />
+    <meta name="twitter:description" content="المنصة رقم #1 للاعبي ببجي موبايل. إعدادات حساسية، أخبار، مقارنة أسلحة، وحاسبة كونكر." />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎮</text></svg>" />
+    <style>
+      body { background-color: #0B0E11; /* Fallback FCP */ }
+      #root { opacity: 0; animation: fadeIn 0.3s ease-in forwards; }
+      @keyframes fadeIn { to { opacity: 1; } }
+      @media (max-width: 768px) {
+        #home-bg-canvas { display: none !important; }
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="home-bg-canvas" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; display: none;"></canvas>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      (function() {
+        // Disable heavy canvas on mobile for better performance
+        if (window.innerWidth <= 768) return;
+
+        const canvas = document.getElementById('home-bg-canvas');
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d', { alpha: false }); // alpha false is faster
+        let width, height, particles = [], fogLayers = [];
+        let animationFrameId;
+
+        function init() {
+          width = canvas.width = window.innerWidth;
+          height = canvas.height = window.innerHeight;
+          particles = [];
+          // Reduce particle count slightly for perf
+          const particleCount = width < 1024 ? 30 : 60;
+          for (let i = 0; i < particleCount; i++) {
+            particles.push({
+              x: Math.random() * width,
+              y: Math.random() * height,
+              size: Math.random() * 2 + 1,
+              speedX: (Math.random() - 0.5) * 0.5,
+              speedY: (Math.random() - 0.5) * 0.5,
+              opacity: Math.random() * 0.5 + 0.2
+            });
+          }
+          fogLayers = [];
+          for (let i = 0; i < 3; i++) { // reduced from 5
+            fogLayers.push({
+              x: Math.random() * width,
+              y: Math.random() * height,
+              size: Math.random() * 400 + 400,
+              speedX: (Math.random() - 0.5) * 0.2,
+              speedY: (Math.random() - 0.5) * 0.1,
+              opacity: Math.random() * 0.05 + 0.02
+            });
+          }
+        }
+
+        let lastTime = 0;
+        function animate(time) {
+          if (time - lastTime < 33) { // throttle to ~30fps 
+            animationFrameId = requestAnimationFrame(animate);
+            return;
+          }
+          lastTime = time;
+
+          if (document.body.classList.contains('is-home')) {
+            canvas.style.display = 'block';
+            ctx.fillStyle = '#0B0E11';
+            ctx.fillRect(0, 0, width, height); // clear with background
+            
+            // Draw Fog
+            fogLayers.forEach(fog => {
+              const gradient = ctx.createRadialGradient(fog.x, fog.y, 0, fog.x, fog.y, fog.size);
+              gradient.addColorStop(0, `rgba(242, 169, 0, ${fog.opacity})`);
+              gradient.addColorStop(1, 'rgba(11, 14, 17, 0)');
+              ctx.fillStyle = gradient;
+              ctx.beginPath();
+              ctx.arc(fog.x, fog.y, fog.size, 0, Math.PI * 2);
+              ctx.fill();
+              
+              fog.x += fog.speedX;
+              fog.y += fog.speedY;
+              
+              if (fog.x < -fog.size) fog.x = width + fog.size;
+              if (fog.x > width + fog.size) fog.x = -fog.size;
+              if (fog.y < -fog.size) fog.y = height + fog.size;
+              if (fog.y > height + fog.size) fog.y = -fog.size;
+            });
+
+            // Draw Golden Dust
+            ctx.fillStyle = '#F2A900';
+            particles.forEach(p => {
+              ctx.globalAlpha = p.opacity;
+              ctx.beginPath();
+              ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+              ctx.fill();
+              
+              p.x += p.speedX;
+              p.y += p.speedY;
+              
+              if (p.x < 0) p.x = width;
+              if (p.x > width) p.x = 0;
+              if (p.y < 0) p.y = height;
+              if (p.y > height) p.y = 0;
+            });
+            ctx.globalAlpha = 1;
+
+          } else {
+            canvas.style.display = 'none';
+          }
+          animationFrameId = requestAnimationFrame(animate);
+        }
+
+        window.addEventListener('resize', () => {
+           if (window.innerWidth <= 768) {
+             cancelAnimationFrame(animationFrameId);
+             canvas.style.display = 'none';
+           } else {
+             init();
+           }
+        }, { passive: true });
+        
+        init();
+        animationFrameId = requestAnimationFrame(animate);
+      })();
+    </script>
+  </body>
+</html>
+
