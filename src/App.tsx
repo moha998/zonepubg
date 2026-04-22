@@ -9506,10 +9506,10 @@ function AppContent() {
               <a href="https://x.com" target="_blank" rel="noreferrer" className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:bg-[#1DA1F2]/20 hover:text-[#1DA1F2] hover:border-[#1DA1F2] transition-colors" title="منصة إكس">
                 <Twitter size={20} />
               </a>
-              <a href="https://instagram.com" target="_blank" rel="noreferrer" className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:bg-[#E1306C]/20 hover:text-[#E1306C] hover:border-[#E1306C] transition-colors" title="إنستجرام">
+              <a href="https:" target="_blank" rel="noreferrer" className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:bg-[#E1306C]/20 hover:text-[#E1306C] hover:border-[#E1306C] transition-colors" title="إنستجرام">
                 <Instagram size={20} />
               </a>
-              <a href="https://facebook.com" target="_blank" rel="noreferrer" className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:bg-[#1877F2]/20 hover:text-[#1877F2] hover:border-[#1877F2] transition-colors" title="فيسبوك">
+              <a href="https" target="_blank" rel="noreferrer" className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:bg-[#1877F2]/20 hover:text-[#1877F2] hover:border-[#1877F2] transition-colors" title="فيسبوك">
                 <Facebook size={20} />
               </a>
             </div>
