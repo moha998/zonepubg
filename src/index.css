@@ -1,0 +1,242 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Cairo", ui-sans-serif, system-ui, sans-serif;
+  
+  --color-primary: #F5C400; 
+  --color-primary-hover: #D8AA00;
+  
+  --color-bg-dark: #070707; 
+  --color-bg-card: #111315;
+  --color-bg-secondary: #070707;
+  --color-text-main: #FFFFFF; 
+  --color-text-muted: #D4D4D8; 
+  --color-border-subtle: rgba(255, 255, 255, 0.10);
+  --color-nav-bg: #101010;
+  
+  --gold-gradient: linear-gradient(135deg, #F5C400, #F5C400);
+  --gold-gradient-hover: linear-gradient(135deg, #F5C400, #F5C400);
+
+  --animate-marquee: marquee 90s linear infinite;
+  --animate-pulse-gold: pulse-gold 8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-pulse-slow: pulse-slow 6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-shimmer: shimmer 6s linear infinite;
+  --animate-float: float 6s ease-in-out infinite;
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes pulse-slow {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-100%); }
+  }
+
+  @keyframes pulse-gold {
+    0%, 100% { opacity: 0.1; }
+    50% { opacity: 0.3; }
+  }
+
+  @keyframes shimmer {
+    to { background-position: 200% center; }
+  }
+}
+
+.light {
+  --color-bg-dark: #F8FAFC; 
+  --color-bg-card: #FFFFFF;
+  --color-bg-secondary: #F1F5F9;
+  --color-text-main: #0F172A; 
+  --color-text-muted: #64748B; 
+  --color-border-subtle: rgba(0, 0, 0, 0.05);
+  --color-nav-bg: rgba(248, 250, 252, 0.8);
+}
+
+@layer base {
+  body {
+    @apply bg-bg-dark text-text-main antialiased min-h-screen relative overflow-x-hidden;
+    font-size: 14px;
+    direction: rtl;
+  }
+
+  body.is-home {
+    background-color: #070707;
+  }
+
+  body::before {
+    display: none;
+  }
+
+  header {
+    @apply sticky top-0 z-50;
+    height: 68px;
+    background: #101010;
+    border-bottom: 1px solid rgba(255,255,255,0.10);
+  }
+}
+
+@layer utilities {
+  .bg-gold-gradient {
+    background: linear-gradient(135deg, #BF953F, #FCF6BA, #B38728, #FBF5B7, #AA771C);
+    background-size: 200% 200%;
+    @apply transition-all duration-500;
+  }
+
+  .bg-gold-gradient:hover {
+    background-position: 100% 100%;
+  }
+
+  .pro-card {
+    @apply border border-white/10 rounded-2xl transition-all duration-500 shadow-2xl backdrop-blur-xl;
+    box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.8);
+    background-color: rgba(21, 25, 28, 0.6); /* Using new card dark with transparency */
+  }
+
+  .pro-card:hover {
+    @apply border-primary/30;
+    box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 20px -5px rgba(212, 175, 55, 0.15);
+  }
+  
+  .premium-glow {
+    @apply relative overflow-hidden;
+  }
+
+  .premium-glow::after {
+    content: "";
+    @apply absolute -inset-[100%] bg-gradient-to-r from-transparent via-white/20 to-transparent -rotate-45 transition-all duration-1000 pointer-events-none;
+    transform: translateX(-100%);
+  }
+
+  .premium-glow:hover::after {
+    transform: translateX(100%);
+  }
+
+  .gold-shimmer {
+    background: var(--gold-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    background-size: 200% auto;
+    animation: shimmer 3s linear infinite;
+  }
+  
+  .btn-gold {
+    background: var(--gold-gradient);
+    background-size: 200% auto;
+    @apply text-black font-black transition-all duration-500 shadow-lg shadow-primary/10 hover:shadow-primary/30 hover:scale-[1.02] active:scale-[0.98] flex items-center justify-center gap-2;
+  }
+  
+  .btn-gold:hover {
+    background-position: right center;
+  }
+
+  .text-gradient {
+    background: var(--gold-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .markdown-body {
+    @apply space-y-4 text-text-muted text-sm md:text-base;
+  }
+  .markdown-body p {
+    @apply leading-relaxed;
+  }
+  .markdown-body ul, .markdown-body ol {
+    @apply pr-8 space-y-2 list-outside text-right;
+  }
+  .markdown-body ul {
+    @apply list-disc;
+  }
+  .markdown-body ol {
+    @apply list-decimal;
+  }
+  .markdown-body li {
+    @apply pl-2 transition-colors hover:text-white;
+  }
+  .markdown-body li::marker {
+    @apply text-primary font-bold;
+  }
+  .markdown-body strong {
+    @apply text-primary font-bold;
+  }
+  .markdown-body code {
+    @apply bg-white/10 px-2 py-0.5 rounded text-xs font-mono text-primary border border-white/5;
+  }
+  
+  /* Responsive Tables with Professional Look */
+  .markdown-body table {
+    @apply w-full border-collapse my-6 text-xs md:text-sm overflow-hidden rounded-2xl border border-white/5 bg-black/20;
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(242, 169, 0, 0.2) transparent;
+  }
+  
+  .markdown-body thead {
+    @apply bg-white/5 text-primary font-bold border-b border-white/10;
+  }
+  
+  .markdown-body th {
+    @apply p-4 text-right font-bold uppercase tracking-wider whitespace-nowrap;
+  }
+  
+  .markdown-body td {
+    @apply p-4 border-b border-white/5 text-right min-w-[140px] align-middle;
+  }
+  
+  .markdown-body tr:last-child td {
+    @apply border-b-0;
+  }
+  
+  .markdown-body tr:nth-child(even) {
+    @apply bg-white/[0.03];
+  }
+  
+  .markdown-body tr:hover {
+    @apply bg-primary/5 transition-all duration-200;
+  }
+
+  /* Professional Scrollbar for tables */
+  .markdown-body table::-webkit-scrollbar {
+    @apply h-2;
+  }
+  .markdown-body table::-webkit-scrollbar-track {
+    @apply bg-black/40 rounded-full;
+  }
+  .markdown-body table::-webkit-scrollbar-thumb {
+    @apply bg-white/10 rounded-full border-2 border-transparent bg-clip-padding hover:bg-primary/40 transition-colors;
+  }
+
+  /* Table Scroll Indicator Hint */
+  .markdown-body table {
+    background-image: linear-gradient(to right, rgba(11, 14, 17, 0.8), rgba(11, 14, 17, 0)),
+                      linear-gradient(to right, rgba(11, 14, 17, 0), rgba(11, 14, 17, 0.8)),
+                      linear-gradient(to right, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.05));
+    background-position: left center, right center, center center;
+    background-repeat: no-repeat;
+    background-size: 20px 100%, 20px 100%, 100% 100%;
+    background-attachment: scroll, scroll, local;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
