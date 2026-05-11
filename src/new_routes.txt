@@ -1,0 +1,237 @@
+<AnimatePresence mode="wait">
+        <Routes location={location} key={location.pathname}>
+          <Route path="/dashboard" element={
+            !userProfile ? (
+              <motion.div
+                key="login-required"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="pro-card p-12 bg-bg-card/50 border-white/5 flex flex-col items-center justify-center text-center"
+              >
+                <div className="w-20 h-20 bg-primary/10 rounded-3xl flex items-center justify-center text-primary mb-6">
+                  <Lock size={40} />
+                </div>
+                <h2 className="text-2xl font-black mb-2">تسجيل الدخول مطلوب</h2>
+                <p className="text-slate-500 mb-8 max-w-md">يرجى تسجيل الدخول للوصول إلى لوحة التحكم الخاصة بك ومتابعة نشاطاتك.</p>
+                <button 
+                  onClick={() => setIsAuthModalOpen(true)}
+                  className="btn-gold px-8 py-4 rounded-2xl font-black shadow-xl shadow-primary/20"
+                >
+                  تسجيل الدخول الآن
+                </button>
+              </motion.div>
+            ) : (
+              <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+                <DashboardPage
+                  userProfile={userProfile}
+                  isAdmin={isAdmin}
+                  siteStats={siteStats}
+                  allUsers={allUsers}
+                  clips={clips}
+                  giveaways={giveaways}
+                  events={events}
+                  onLogout={handleLogout}
+                  onUpdateProfile={async (data) => {
+                    if (userProfile) {
+                      try {
+                        await updateDoc(doc(db, "users", userProfile.uid), data);
+                        showNotification("تم تحديث الملف الشخصي بنجاح", "success");
+                      } catch (error) {
+                        console.error("Error updating profile:", error);
+                        showNotification("فشل تحديث الملف الشخصي", "error");
+                      }
+                    }
+                  }}
+                  onDeleteUser={(uid) => deleteItem("users", uid)}
+                  onUpdateUserRole={(uid, role) => updateDoc(doc(db, "users", uid), { role })}
+                  onNavigate={handleNavigate}
+                  isTournamentsHidden={competitionSettings.find(s => s.id === 'global')?.isTournamentsHidden || false}
+                  onToggleTournaments={handleToggleTournaments}
+                  isCommentsEnabled={competitionSettings.find(s => s.id === 'global')?.isCommentsEnabled !== false}
+                  onToggleComments={handleToggleComments}
+                  competitionSettings={competitionSettings}
+                  onUpdateCompetitionSettings={handleUpdateCompetitionSettings}
+                  isUpdatingSettings={isUpdatingSettings}
+                  onSyncData={async (type) => {
+                    if (type === 'weapons') await handleSyncWeapons();
+                    if (type === 'attachments') await handleSyncAttachments();
+                    if (type === 'characters') await handleSyncCharacters();
+                    if (type === 'players') await handleSyncProPlayers();
+                  }}
+                  isLogoHidden={competitionSettings.find(s => s.id === 'global')?.isLogoHidden || false}
+                  onToggleLogo={handleToggleLogo}
+                />
+              </Suspense>
+            )
+          } />
+
+          <Route path="/" element={
+            <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+              <HomePage
+                news={news}
+                loadingNews={loadingNews}
+                clips={clips}
+                ads={ads}
+                competitionSettings={competitionSettings}
+                isAdmin={isAdmin}
+                setActiveTab={setActiveTab}
+                SubtleAdBanner={SubtleAdBanner}
+                TournamentFlashBanner={TournamentFlashBanner}
+                OfficialGlobalTournaments={OfficialGlobalTournaments}
+              />
+            </Suspense>
+          } />
+
+          <Route path="/sensitivity" element={
+            <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+              <SensitivityPage
+                SubtleAdBanner={SubtleAdBanner}
+                isAdmin={isAdmin}
+                currentWeapons={currentWeapons}
+                handleCopy={handleCopy}
+                copied={copied}
+                user={user}
+                handleLogin={handleLogin}
+                showNotification={showNotification}
+              />
+            </Suspense>
+          } />
+
+          <Route path="/characters" element={
+            <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+              <CharactersPage
+                currentCharacters={currentCharacters}
+                currentWeapons={currentWeapons}
+                currentAttachments={currentAttachments}
+                isAdmin={isAdmin}
+                deleteItem={deleteItem}
+                setEditingContentData={setEditingContentData}
+                setIsEditingCharacter={setIsEditingCharacter}
+                setIsEditingWeapon={setIsEditingWeapon}
+                setIsEditingAttachment={setIsEditingAttachment}
+                setIsAddingContent={setIsAddingContent}
+                groupedWeapons={groupedWeapons}
+                categoryNames={categoryNames}
+                attachmentTypes={attachmentTypes}
+              />
+            </Suspense>
+          } />
+
+          <Route path="/loadouts" element={
+            <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+              <LoadoutsPage
+                currentWeapons={currentWeapons}
+                currentAttachments={currentAttachments}
+                weaponRatings={weaponRatings}
+                categoryNames={categoryNames}
+                getWeaponProTip={getWeaponProTip}
+                setSelectedWeaponToRate={setSelectedWeaponToRate}
+                setIsRatingModalOpen={setIsRatingModalOpen}
+                SubtleAdBanner={SubtleAdBanner}
+              />
+            </Suspense>
+          } />
+
+          <Route path="/events" element={
+            <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+              <EventsPage
+                isAdmin={isAdmin}
+                user={user}
+                userProfile={userProfile}
+                competitionSettings={competitionSettings}
+                clips={clips}
+                comments={comments}
+                handleUpdateCompetitionSettings={handleUpdateCompetitionSettings}
+                isUpdatingSettings={isUpdatingSettings}
+                showNotification={showNotification}
+                onLogin={handleLogin}
+              />
+            </Suspense>
+          } />
+
+          <Route path="/rate" element={
+            <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+              <RatePage
+                videoUrl={videoUrl}
+                setVideoUrl={setVideoUrl}
+                isAnalyzing={isAnalyzing}
+                isAiTyping={isAiTyping}
+                currentText={currentText}
+                currentType={currentType}
+                analysisStep={analysisStep}
+                handleAnalyzeVideo={handleAnalyzeVideo}
+                aiRateLimited={aiRateLimited}
+                aiQuotaError={aiQuotaError}
+                clips={clips}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                selectedCategory={selectedCategory}
+                setSelectedCategory={setSelectedCategory}
+                isAdmin={isAdmin}
+                deleteItem={deleteItem}
+                user={user}
+                handleLogin={handleLogin}
+              />
+            </Suspense>
+          } />
+
+          <Route path="/game-events" element={
+            <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+              <GameEventsPage
+                gameEvents={gameEvents}
+                getTimeRemaining={getTimeRemaining}
+              />
+            </Suspense>
+          } />
+
+          <Route path="/giveaways" element={
+            <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+              <GiveawaysPage
+                activeGiveaway={activeGiveaway}
+                isJoiningGiveaway={isJoiningGiveaway}
+                handleJoinGiveaway={handleJoinGiveaway}
+                hasJoinedGiveaway={hasJoinedGiveaway}
+                previousGiveaways={previousGiveaways}
+                getGiveawayStatus={getGiveawayStatus}
+                user={user}
+                handleLogin={handleLogin}
+              />
+            </Suspense>
+          } />
+
+          <Route path="/compare" element={
+            <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+              <ComparePage
+                currentWeapons={currentWeapons}
+                groupedWeapons={groupedWeapons}
+                categoryNames={categoryNames}
+                getWeaponSmartAnalysis={getWeaponSmartAnalysis}
+                SmartWeaponCard={SmartWeaponCard}
+                isAdmin={isAdmin}
+                setShowAddWeaponModal={setShowAddWeaponModal}
+                SubtleAdBanner={SubtleAdBanner}
+              />
+            </Suspense>
+          } />
+
+          <Route path="/calculator" element={
+            <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+              <ConquerorCalculator SubtleAdBanner={SubtleAdBanner} />
+            </Suspense>
+          } />
+
+          <Route path="/news" element={
+            <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+              <NewsPage SubtleAdBanner={SubtleAdBanner} />
+            </Suspense>
+          } />
+
+          <Route path="/ads" element={
+            <Suspense fallback={<div className="flex items-center justify-center p-12"><div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin" /></div>}>
+              <AdsPage ads={ads} getIcon={getIconComponent} />
+            </Suspense>
+          } />
+
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AnimatePresence>
