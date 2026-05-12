@@ -1,0 +1,265 @@
+{
+  "entities": {
+    "userProfile": {
+      "title": "User Profile",
+      "description": "Stores user sensitivity settings and profile info",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "admin"] },
+        "status": { "type": "string", "enum": ["active", "disabled", "suspended"] },
+        "isBanned": { "type": "boolean" },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "camera": { "type": "object" },
+            "ads": { "type": "object" },
+            "gyroscope": { "type": "object" }
+          }
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "event": {
+      "title": "Event",
+      "description": "Upcoming PUBG tournaments and events",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string", "enum": ["upcoming", "ongoing", "ended"] },
+        "isHidden": { "type": "boolean" },
+        "authorEmail": { "type": "string" }
+      },
+      "required": ["title", "date", "status"]
+    },
+    "giveaway": {
+      "title": "Giveaway",
+      "description": "Active giveaways for UC and items",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "image": { "type": "string" },
+        "endDate": { "type": "string" },
+        "participants": { "type": "number" },
+        "status": { "type": "string", "enum": ["active", "ended"] },
+        "authorEmail": { "type": "string" }
+      },
+      "required": ["title", "endDate", "status"]
+    },
+    "ranking": {
+      "title": "Ranking",
+      "description": "Top players ranking",
+      "type": "object",
+      "properties": {
+        "rank": { "type": "number" },
+        "playerName": { "type": "string" },
+        "country": { "type": "string" },
+        "stats": { "type": "string" }
+      },
+      "required": ["rank", "playerName"]
+    },
+    "weaponRating": {
+      "title": "Weapon Rating",
+      "description": "User ratings and comments for weapon loadouts",
+      "type": "object",
+      "properties": {
+        "weaponId": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userPhoto": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["weaponId", "rating", "userId"]
+    },
+    "device": {
+      "title": "Device",
+      "description": "Device sensitivity settings",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "brand": { "type": "string" },
+        "code": { "type": "string" },
+        "screenSize": { "type": "string" },
+        "useGyroscope": { "type": "boolean" },
+        "playStyle": { "type": "string", "enum": ["Sniper", "Rusher"] },
+        "settings": { "type": "object" }
+      },
+      "required": ["name", "brand"]
+    },
+    "imageLibrary": {
+      "title": "Image Library",
+      "description": "Stored images for admin use",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "url": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["url", "name"]
+    },
+    "weapon": {
+      "title": "Weapon",
+      "description": "PUBG weapon data",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "nameEn": { "type": "string" },
+        "nameAr": { "type": "string" },
+        "type": { "type": "string" },
+        "damage": { "type": "number" },
+        "recoil": { "type": "number" },
+        "speed": { "type": "number" },
+        "range": { "type": "number" },
+        "image": { "type": "string" },
+        "bestAttachments": { "type": "object" }
+      },
+      "required": ["id", "nameEn", "nameAr", "type"]
+    },
+    "attachment": {
+      "title": "Attachment",
+      "description": "PUBG weapon attachment data",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "arabicName": { "type": "string" },
+        "type": { "type": "string" },
+        "effect": { "type": "string" },
+        "description": { "type": "string" },
+        "image": { "type": "string" }
+      },
+      "required": ["id", "name", "arabicName", "type"]
+    },
+    "character": {
+      "title": "Character",
+      "description": "PUBG character data",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "arabicName": { "type": "string" },
+        "ability": { "type": "string" },
+        "description": { "type": "string" },
+        "image": { "type": "string" },
+        "levelMaxBonus": { "type": "string" }
+      },
+      "required": ["id", "name", "arabicName"]
+    },
+    "competitionSettings": {
+      "title": "Competition Settings",
+      "description": "Global settings for competitions and events",
+      "type": "object",
+      "properties": {
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "isAllEventsHidden": { "type": "boolean" },
+        "isTournamentsHidden": { "type": "boolean" },
+        "isLogoHidden": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "siteStats": {
+      "title": "Site Stats",
+      "description": "Global statistics for visitors and participations",
+      "type": "object",
+      "properties": {
+        "visitors": { "type": "number" },
+        "totalParticipations": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ad": {
+      "title": "Advertisement",
+      "description": "In-app advertisements and banners",
+      "type": "object",
+      "properties": {
+        "title": { "type": "string" },
+        "image": { "type": "string" },
+        "link": { "type": "string" },
+        "isActive": { "type": "boolean" }
+      }
+    },
+    "sensitivityRating": {
+      "title": "Sensitivity Rating",
+      "description": "User ratings for sensitivity settings",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "rating": { "type": "number" },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/ads/{adId}": {
+      "schema": "ad",
+      "description": "In-app advertisements"
+    },
+    "/sensitivityRatings/{ratingId}": {
+      "schema": "sensitivityRating",
+      "description": "Sensitivity ratings"
+    },
+    "/competitionSettings/{settingId}": {
+      "schema": "competitionSettings",
+      "description": "Global competition settings"
+    },
+    "/siteStats/{statsId}": {
+      "schema": "siteStats",
+      "description": "Global site statistics"
+    },
+    "/users/{userId}": {
+      "schema": "userProfile",
+      "description": "User profile and settings"
+    },
+    "/events/{eventId}": {
+      "schema": "event",
+      "description": "Public events"
+    },
+    "/giveaways/{giveawayId}": {
+      "schema": "giveaway",
+      "description": "Public giveaways"
+    },
+    "/rankings/{rankingId}": {
+      "schema": "ranking",
+      "description": "Global rankings"
+    },
+    "/weaponRatings/{ratingId}": {
+      "schema": "weaponRating",
+      "description": "Weapon loadout ratings"
+    },
+    "/devices/{deviceId}": {
+      "schema": "device",
+      "description": "Device sensitivity settings"
+    },
+    "/players/{playerId}": {
+      "schema": "device",
+      "description": "Pro player sensitivity settings"
+    },
+    "/imageLibrary/{imageId}": {
+      "schema": "imageLibrary",
+      "description": "Admin image library"
+    },
+    "/weapons/{weaponId}": {
+      "schema": "weapon",
+      "description": "Weapon data"
+    },
+    "/attachments/{attachmentId}": {
+      "schema": "attachment",
+      "description": "Attachment data"
+    },
+    "/characters/{characterId}": {
+      "schema": "character",
+      "description": "Character data"
+    }
+  }
+}
