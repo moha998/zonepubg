@@ -1,0 +1,10 @@
+{
+  "projectId": "pubgco",
+  "appId": "1:819347633108:web:2a971b3eb6a15da8999c41",
+  "apiKey": "AIzaSyCRhYQ6ScNMO9GixZwW_Z5p_JtsK6CNxQw",
+  "authDomain": "pubgco.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-0f30f733-4e31-48f0-9a50-fcc09df8c9da",
+  "storageBucket": "pubgco.firebasestorage.app",
+  "messagingSenderId": "819347633108",
+  "measurementId": ""
+}
