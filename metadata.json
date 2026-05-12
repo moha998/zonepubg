@@ -1,8 +1,0 @@
-{
-  "name": "ZONEPUBG",
-  "description": "المنصة رقم #1 للاعبي ببجي - إعدادات حساسية، أخبار، فعاليات، وأدوات احترافية.",
-  "requestFramePermissions": [
-    "geolocation"
-  ],
-  "majorCapabilities": []
-}
